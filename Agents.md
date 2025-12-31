@@ -34,6 +34,7 @@ trust bundles for distribution.
 - `scripts/export/01_export_signer_level1.sh`: export root cert + level 1 signer key/cert
 - `scripts/export/02_export_signer_level2.sh`: export root/level1 certs + level 2 signer key/cert
 - `scripts/export/03_export_signer_level3.sh`: export root/level1/level2 certs + level 3 signer key/cert
+- `scripts/export/04_export_client.sh`: export client key/cert to `trust-bundles/client/<name>/`
 
 ## Import scripts
 
@@ -41,6 +42,10 @@ trust bundles for distribution.
 - `scripts/import/01_import_level1.sh`: import level 1 key/cert bundle
 - `scripts/import/02_import_level2.sh`: import level 2 key/cert bundle
 - `scripts/import/03_import_level3.sh`: import level 3 key/cert bundle
+
+All level import scripts require both key and cert; they refuse to import
+partial bundles. When they do run, they also import any public certs present
+in the trust bundle into their respective `*/certs` directories.
 
 ## Defaults and overrides
 
@@ -63,6 +68,7 @@ Examples:
 ./scripts/export/01_export_signer_level1.sh
 ./scripts/export/02_export_signer_level2.sh
 ./scripts/export/03_export_signer_level3.sh
+./scripts/export/04_export_client.sh "client-001"
 
 ./scripts/import/00_import_root.sh
 ./scripts/import/01_import_level1.sh

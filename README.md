@@ -53,7 +53,13 @@ Export trust bundles for a signer level (creates `trust-bundles/` once):
 ./scripts/export/03_export_signer_level3.sh
 ```
 
-Import trust bundles (level keys/certs for signing, root cert for trust):
+Export a client key/cert bundle:
+
+```bash
+./scripts/export/04_export_client.sh "client-001"
+```
+
+Import trust bundles (requires full key+cert for level signers; imports all public certs present):
 
 ```bash
 ./scripts/import/00_import_root.sh
