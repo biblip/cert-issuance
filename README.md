@@ -11,7 +11,7 @@ stored in `conf/ca_ext.cnf` and each script can take overrides via CLI args.
 ## Layout
 
 - `conf/ca_ext.cnf`: shared extensions and default CN/days/key bits
-- `scripts/`: build and export helpers
+- `scripts/`: make/export/import helpers (see subdirectories)
 - `root/`, `level1/`, `level2/`, `level3/`: CA keys/certs/CSRs
 - `client/`: per-client keys/certs/CSRs
 - `trust-bundles/`: exported artifacts for distribution
@@ -21,45 +21,45 @@ stored in `conf/ca_ext.cnf` and each script can take overrides via CLI args.
 Create a full chain (root -> level1 -> level2 -> level3):
 
 ```bash
-./scripts/00_make_root.sh
-./scripts/01_make_level1.sh
-./scripts/02_make_level2.sh
-./scripts/03_make_level3.sh
+./scripts/make/00_make_root.sh
+./scripts/make/01_make_level1.sh
+./scripts/make/02_make_level2.sh
+./scripts/make/03_make_level3.sh
 ```
 
 Issue a client certificate signed by the level 3 CA:
 
 ```bash
-./scripts/04_make_client.sh "client-001"
+./scripts/make/04_make_client.sh "client-001"
 ```
 
 Sign an existing CSR:
 
 ```bash
-./scripts/04_make_client_from_csr.sh "client-001" /path/to/client.csr.pem
+./scripts/make/04_make_client_from_csr.sh "client-001" /path/to/client.csr.pem
 ```
 
 Export root trust bundle:
 
 ```bash
-./scripts/00_export_root.sh
+./scripts/export/00_export_root.sh
 ```
 
 Export trust bundles for a signer level (creates `trust-bundles/` once):
 
 ```bash
-./scripts/01_export_signer_level1.sh
-./scripts/02_export_signer_level2.sh
-./scripts/03_export_signer_level3.sh
+./scripts/export/01_export_signer_level1.sh
+./scripts/export/02_export_signer_level2.sh
+./scripts/export/03_export_signer_level3.sh
 ```
 
 Import trust bundles (level keys/certs for signing, root cert for trust):
 
 ```bash
-./scripts/00_import_root.sh
-./scripts/01_import_level1.sh
-./scripts/02_import_level2.sh
-./scripts/03_import_level3.sh
+./scripts/import/00_import_root.sh
+./scripts/import/01_import_level1.sh
+./scripts/import/02_import_level2.sh
+./scripts/import/03_import_level3.sh
 ```
 
 ## Script arguments
@@ -67,16 +67,16 @@ Import trust bundles (level keys/certs for signing, root cert for trust):
 Each CA creation script accepts optional overrides in the form:
 
 ```bash
-./scripts/00_make_root.sh [cn] [days] [key_bits]
-./scripts/01_make_level1.sh [cn] [days] [key_bits]
-./scripts/02_make_level2.sh [cn] [days] [key_bits]
-./scripts/03_make_level3.sh [cn] [days] [key_bits]
+./scripts/make/00_make_root.sh [cn] [days] [key_bits]
+./scripts/make/01_make_level1.sh [cn] [days] [key_bits]
+./scripts/make/02_make_level2.sh [cn] [days] [key_bits]
+./scripts/make/03_make_level3.sh [cn] [days] [key_bits]
 ```
 
 The client script accepts:
 
 ```bash
-./scripts/04_make_client.sh [client_cn] [days] [key_bits]
+./scripts/make/04_make_client.sh [client_cn] [days] [key_bits]
 ```
 
 Defaults are pulled from `conf/ca_ext.cnf` when arguments are omitted. Scripts
