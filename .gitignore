@@ -6,7 +6,11 @@
 /level1/
 /level2/
 /level3/
+/level3-client/
+/level3-server/
 /client/
+/server/
+/output/
 /trust-bundles/
 
 # Common OpenSSL outputs

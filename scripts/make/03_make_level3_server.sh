@@ -6,10 +6,10 @@ EXTFILE="conf/ca_ext.cnf"
 IM_KEY="level2/private/level2.key.pem"
 IM_CRT="level2/certs/level2.crt.pem"
 
-mkdir -p level3/private level3/certs level3/reqs
-KEY="level3/private/level3.key.pem"
-CSR="level3/reqs/level3.csr.pem"
-CRT="level3/certs/level3.crt.pem"
+mkdir -p level3-server/private level3-server/certs level3-server/reqs
+KEY="level3-server/private/level3-server.key.pem"
+CSR="level3-server/reqs/level3-server.csr.pem"
+CRT="level3-server/certs/level3-server.crt.pem"
 
 [[ -f "$IM_KEY" && -f "$IM_CRT" ]] || { echo "Missing level2 key/cert ($IM_KEY, $IM_CRT)"; exit 1; }
 [[ -f "$EXTFILE" ]] || { echo "Missing extension file: $EXTFILE"; exit 1; }
@@ -22,15 +22,15 @@ conf_get() {
   ' "$EXTFILE"
 }
 
-CN="${1:-$(conf_get level3_cn)}"
-DAYS="${2:-$(conf_get level3_days)}"
-KEY_BITS="${3:-$(conf_get level3_key_bits)}"
+CN="${1:-$(conf_get level3_server_cn)}"
+DAYS="${2:-$(conf_get level3_server_days)}"
+KEY_BITS="${3:-$(conf_get level3_server_key_bits)}"
 
-CN="${CN:-Level 3 CA}"
+CN="${CN:-Level 3 Server CA}"
 DAYS="${DAYS:-1825}"
 KEY_BITS="${KEY_BITS:-4096}"
 
-[[ -e "$KEY" || -e "$CRT" ]] && { echo "Refusing to overwrite existing level3 key/cert ($KEY, $CRT)"; exit 1; }
+[[ -e "$KEY" || -e "$CRT" ]] && { echo "Refusing to overwrite existing level3 server key/cert ($KEY, $CRT)"; exit 1; }
 
 openssl genrsa -out "$KEY" "$KEY_BITS"
 chmod 600 "$KEY"
@@ -47,7 +47,7 @@ openssl x509 -req -sha256 \
   -out "$CRT" \
   -extfile "$EXTFILE" -extensions v3_level3_ca
 
-echo "Level 3 CA created:"
+echo "Level 3 Server CA created:"
 echo "  Key : $KEY"
 echo "  Cert: $CRT"
 openssl x509 -in "$CRT" -noout -subject -issuer -dates

@@ -3,10 +3,10 @@ set -euo pipefail
 
 EXTFILE="conf/ca_ext.cnf"
 
-ISSUER_KEY="level3/private/level3.key.pem"
-ISSUER_CRT="level3/certs/level3.crt.pem"
+ISSUER_KEY="level3-client/private/level3-client.key.pem"
+ISSUER_CRT="level3-client/certs/level3-client.crt.pem"
 
-[[ -f "$ISSUER_KEY" && -f "$ISSUER_CRT" ]] || { echo "Missing level3 key/cert ($ISSUER_KEY, $ISSUER_CRT)"; exit 1; }
+[[ -f "$ISSUER_KEY" && -f "$ISSUER_CRT" ]] || { echo "Missing level3 client key/cert ($ISSUER_KEY, $ISSUER_CRT)"; exit 1; }
 [[ -f "$EXTFILE" ]] || { echo "Missing extension file: $EXTFILE"; exit 1; }
 
 conf_get() {
@@ -32,7 +32,7 @@ sanitize_name() {
 SAFE_CN="$(sanitize_name "$CLIENT_CN")"
 SAFE_CN="${SAFE_CN:-client}"
 
-BASE_DIR="client/${SAFE_CN}"
+BASE_DIR="output/client/${SAFE_CN}"
 KEY="${BASE_DIR}/private/${SAFE_CN}.key.pem"
 CSR="${BASE_DIR}/reqs/${SAFE_CN}.csr.pem"
 CRT="${BASE_DIR}/cert/${SAFE_CN}.crt.pem"

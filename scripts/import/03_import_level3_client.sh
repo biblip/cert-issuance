@@ -3,8 +3,8 @@ set -euo pipefail
 
 BUNDLE_DIR="${1:-trust-bundles}"
 
-SRC_CRT="${BUNDLE_DIR}/level1/level1.crt.pem"
-SRC_KEY="${BUNDLE_DIR}/level1/level1.key.pem"
+SRC_CRT="${BUNDLE_DIR}/level3-client/level3-client.crt.pem"
+SRC_KEY="${BUNDLE_DIR}/level3-client/level3-client.key.pem"
 
 ROOT_CRT="${BUNDLE_DIR}/root/root.crt.pem"
 LEVEL1_CRT="${BUNDLE_DIR}/level1/level1.crt.pem"
@@ -12,14 +12,14 @@ LEVEL2_CRT="${BUNDLE_DIR}/level2/level2.crt.pem"
 LEVEL3_CLIENT_CRT="${BUNDLE_DIR}/level3-client/level3-client.crt.pem"
 LEVEL3_SERVER_CRT="${BUNDLE_DIR}/level3-server/level3-server.crt.pem"
 
-DEST_CRT="level1/certs/level1.crt.pem"
-DEST_KEY="level1/private/level1.key.pem"
+DEST_CRT="level3-client/certs/level3-client.crt.pem"
+DEST_KEY="level3-client/private/level3-client.key.pem"
 
-[[ -f "$SRC_KEY" && -f "$SRC_CRT" ]] || { echo "Missing level1 bundle ($SRC_KEY, $SRC_CRT)"; exit 1; }
+[[ -f "$SRC_KEY" && -f "$SRC_CRT" ]] || { echo "Missing level3 client bundle ($SRC_KEY, $SRC_CRT)"; exit 1; }
 
-mkdir -p root/certs level1/private level1/certs level2/certs level3-client/certs level3-server/certs
+mkdir -p root/certs level1/certs level2/certs level3-client/private level3-client/certs level3-server/certs
 
-[[ -e "$DEST_KEY" || -e "$DEST_CRT" ]] && { echo "Refusing to overwrite existing level1 key/cert ($DEST_KEY, $DEST_CRT)"; exit 1; }
+[[ -e "$DEST_KEY" || -e "$DEST_CRT" ]] && { echo "Refusing to overwrite existing level3 client key/cert ($DEST_KEY, $DEST_CRT)"; exit 1; }
 
 cp -p "$SRC_KEY" "$DEST_KEY"
 cp -p "$SRC_CRT" "$DEST_CRT"
@@ -31,6 +31,6 @@ chmod 600 "$DEST_KEY"
 [[ -f "$LEVEL3_CLIENT_CRT" ]] && cp -p "$LEVEL3_CLIENT_CRT" "level3-client/certs/level3-client.crt.pem"
 [[ -f "$LEVEL3_SERVER_CRT" ]] && cp -p "$LEVEL3_SERVER_CRT" "level3-server/certs/level3-server.crt.pem"
 
-echo "Level 1 import complete:"
+echo "Level 3 Client import complete:"
 echo "  Key : $DEST_KEY"
 echo "  Cert: $DEST_CRT"

@@ -6,8 +6,8 @@ CSR_PATH="${2:-}"
 DAYS_ARG="${3:-}"
 
 EXTFILE="conf/ca_ext.cnf"
-ISSUER_KEY="level3/private/level3.key.pem"
-ISSUER_CRT="level3/certs/level3.crt.pem"
+ISSUER_KEY="level3-client/private/level3-client.key.pem"
+ISSUER_CRT="level3-client/certs/level3-client.crt.pem"
 
 if [[ -z "$CLIENT_NAME" || -z "$CSR_PATH" ]]; then
   echo "Usage: $0 <client-name> <csr-path> [days]"
@@ -19,7 +19,7 @@ if [[ ! -f "$CSR_PATH" ]]; then
   exit 1
 fi
 
-[[ -f "$ISSUER_KEY" && -f "$ISSUER_CRT" ]] || { echo "Missing level3 key/cert ($ISSUER_KEY, $ISSUER_CRT)"; exit 1; }
+[[ -f "$ISSUER_KEY" && -f "$ISSUER_CRT" ]] || { echo "Missing level3 client key/cert ($ISSUER_KEY, $ISSUER_CRT)"; exit 1; }
 [[ -f "$EXTFILE" ]] || { echo "Missing extension file: $EXTFILE"; exit 1; }
 
 conf_get() {
@@ -40,7 +40,7 @@ sanitize_name() {
 SAFE_NAME="$(sanitize_name "$CLIENT_NAME")"
 SAFE_NAME="${SAFE_NAME:-client}"
 
-BASE_DIR="client/${SAFE_NAME}"
+BASE_DIR="output/client/${SAFE_NAME}"
 CSR="${BASE_DIR}/reqs/${SAFE_NAME}.csr.pem"
 CRT="${BASE_DIR}/cert/${SAFE_NAME}.crt.pem"
 

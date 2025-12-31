@@ -19,13 +19,22 @@ level2_cn = Level 2 CA
 level2_days = 3650
 level2_key_bits = 4096
 
-level3_cn = Level 3 CA
-level3_days = 1825
-level3_key_bits = 4096
+level3_client_cn = Level 3 Client CA
+level3_client_days = 1825
+level3_client_key_bits = 4096
+
+level3_server_cn = Level 3 Server CA
+level3_server_days = 1825
+level3_server_key_bits = 4096
 
 client_cn = client-001
 client_days = 825
 client_key_bits = 3072
+
+server_cn = server-001
+server_days = 825
+server_key_bits = 3072
+server_san = DNS:server-001
 
 [ v3_root_ca ]
 basicConstraints = critical, CA:true, pathlen:3
@@ -55,5 +64,12 @@ authorityKeyIdentifier = keyid:always,issuer
 basicConstraints = critical, CA:false
 keyUsage = critical, digitalSignature, keyEncipherment
 extendedKeyUsage = clientAuth
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid,issuer
+
+[ v3_server ]
+basicConstraints = critical, CA:false
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth
 subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid,issuer
