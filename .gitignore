@@ -1,0 +1,14 @@
+.DS_Store
+.codex/
+
+# Generated PKI material
+/root/
+/level1/
+/level2/
+/level3/
+/client/
+/trust-bundles/
+
+# Common OpenSSL outputs
+*.srl
+*.pem

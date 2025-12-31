@@ -1,0 +1,59 @@
+# Shared X.509 extensions for all certs in this PKI.
+# Used with:
+#  - openssl x509 -req ... -extfile conf/ca_ext.cnf -extensions <section>
+#
+# NOTE: Root cert is created via openssl req -x509 and needs a -config,
+# but we still reference these same sections by embedding this file.
+
+[ defaults ]
+# Stronger baseline defaults; scripts read these if no CLI args are provided.
+root_cn = Root CA
+root_days = 9125
+root_key_bits = 4096
+
+level1_cn = Level 1 CA
+level1_days = 5475
+level1_key_bits = 4096
+
+level2_cn = Level 2 CA
+level2_days = 3650
+level2_key_bits = 4096
+
+level3_cn = Level 3 CA
+level3_days = 1825
+level3_key_bits = 4096
+
+client_cn = client-001
+client_days = 825
+client_key_bits = 3072
+
+[ v3_root_ca ]
+basicConstraints = critical, CA:true, pathlen:3
+keyUsage = critical, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always
+
+[ v3_level1_ca ]
+basicConstraints = critical, CA:true, pathlen:2
+keyUsage = critical, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer
+
+[ v3_level2_ca ]
+basicConstraints = critical, CA:true, pathlen:1
+keyUsage = critical, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer
+
+[ v3_level3_ca ]
+basicConstraints = critical, CA:true, pathlen:0
+keyUsage = critical, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer
+
+[ v3_client ]
+basicConstraints = critical, CA:false
+keyUsage = critical, digitalSignature, keyEncipherment
+extendedKeyUsage = clientAuth
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid,issuer
