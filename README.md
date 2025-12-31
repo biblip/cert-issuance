@@ -39,6 +39,12 @@ Sign an existing CSR:
 ./scripts/04_make_client_from_csr.sh "client-001" /path/to/client.csr.pem
 ```
 
+Export root trust bundle:
+
+```bash
+./scripts/00_export_root.sh
+```
+
 Export trust bundles for a signer level (creates `trust-bundles/` once):
 
 ```bash

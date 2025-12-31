@@ -30,6 +30,7 @@ trust bundles for distribution.
 
 ## Export scripts
 
+- `scripts/00_export_root.sh`: export root cert to `trust-bundles/root/`
 - `scripts/01_export_signer_level1.sh`: export root cert + level 1 signer key/cert
 - `scripts/02_export_signer_level2.sh`: export root/level1 certs + level 2 signer key/cert
 - `scripts/03_export_signer_level3.sh`: export root/level1/level2 certs + level 3 signer key/cert
@@ -58,6 +59,7 @@ Examples:
 ./scripts/04_make_client.sh "client-001"
 ./scripts/04_make_client_from_csr.sh "client-001" /path/to/client.csr.pem
 
+./scripts/00_export_root.sh
 ./scripts/01_export_signer_level1.sh
 ./scripts/02_export_signer_level2.sh
 ./scripts/03_export_signer_level3.sh
