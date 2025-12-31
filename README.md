@@ -39,13 +39,12 @@ Sign an existing CSR:
 ./scripts/04_make_client_from_csr.sh "client-001" /path/to/client.csr.pem
 ```
 
-Export trust bundles:
+Export trust bundles for a signer level (creates `trust-bundles/` once):
 
 ```bash
-./scripts/00_export_root.sh
-./scripts/01_export_level1.sh
-./scripts/02_export_level2.sh
-./scripts/03_export_level3.sh
+./scripts/01_export_signer_level1.sh
+./scripts/02_export_signer_level2.sh
+./scripts/03_export_signer_level3.sh
 ```
 
 Import trust bundles (level keys/certs for signing, root cert for trust):
@@ -76,4 +75,5 @@ The client script accepts:
 
 Defaults are pulled from `conf/ca_ext.cnf` when arguments are omitted. Scripts
 refuse to overwrite existing keys/certs, so clean or rename artifacts if you
-need to regenerate them.
+need to regenerate them. Export scripts also refuse to run if `trust-bundles/`
+already exists; delete it manually to re-export.
