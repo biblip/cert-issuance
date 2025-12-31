@@ -35,6 +35,13 @@ trust bundles for distribution.
 - `scripts/02_export_level2.sh`: export level 2 key/cert
 - `scripts/03_export_level3.sh`: export level 3 key/cert
 
+## Import scripts
+
+- `scripts/00_import_root.sh`: import root cert bundle to `root/certs/`
+- `scripts/01_import_level1.sh`: import level 1 key/cert bundle
+- `scripts/02_import_level2.sh`: import level 2 key/cert bundle
+- `scripts/03_import_level3.sh`: import level 3 key/cert bundle
+
 ## Defaults and overrides
 
 - Defaults live in `conf/ca_ext.cnf` under `[ defaults ]`.
@@ -56,6 +63,11 @@ Examples:
 ./scripts/01_export_level1.sh
 ./scripts/02_export_level2.sh
 ./scripts/03_export_level3.sh
+
+./scripts/00_import_root.sh
+./scripts/01_import_level1.sh
+./scripts/02_import_level2.sh
+./scripts/03_import_level3.sh
 ```
 
 ## Safety notes

@@ -48,6 +48,15 @@ Export trust bundles:
 ./scripts/03_export_level3.sh
 ```
 
+Import trust bundles (level keys/certs for signing, root cert for trust):
+
+```bash
+./scripts/00_import_root.sh
+./scripts/01_import_level1.sh
+./scripts/02_import_level2.sh
+./scripts/03_import_level3.sh
+```
+
 ## Script arguments
 
 Each CA creation script accepts optional overrides in the form:
