@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPTS_DIR="${ROOT_DIR}/scripts"
+HISTORY_FILE="${ROOT_DIR}/.admin_history"
+EXTFILE="${ROOT_DIR}/conf/ca_ext.cnf"
 
 clear_screen() {
   printf "\033c"
@@ -34,117 +36,264 @@ prompt_secret() {
   printf '%s' "$value"
 }
 
+conf_get() {
+  local key="$1"
+  awk -F' *= *' -v section="defaults" -v key="$key" '
+    $0 ~ "^\\[" section "\\]" { in_section=1; next }
+    $0 ~ "^\\[" { in_section=0 }
+    in_section && $1 == key { print $2; exit }
+  ' "$EXTFILE"
+}
+
+build_cmd_string() {
+  local arg
+  local out=""
+  for arg in "$@"; do
+    out+=$(printf '%q ' "$arg")
+  done
+  printf '%s' "${out% }"
+}
+
+record_history() {
+  local label="$1"
+  local needs_password="$2"
+  local cmd_string="$3"
+  local ts
+  ts="$(date +%Y-%m-%dT%H:%M:%S)"
+  printf '%s|%s|%s|%s\n' "$ts" "$label" "$needs_password" "$cmd_string" >> "$HISTORY_FILE"
+}
+
+run_history_command() {
+  local label="$1"
+  local needs_password="$2"
+  local password="${3:-}"
+  shift 3
+  local cmd_string
+  cmd_string="$(build_cmd_string "$@")"
+  printf "\n>> %s\n" "$cmd_string"
+  if [[ "$needs_password" == "1" && -n "$password" ]]; then
+    P12_PASSWORD="$password" "$@"
+  else
+    "$@"
+  fi
+  record_history "$label" "$needs_password" "$cmd_string"
+}
+
 run_cmd() {
-  printf "\n>> %s\n" "$*"
+  local label="$1"
+  local needs_password="$2"
+  shift 2
+  local cmd_string
+  cmd_string="$(build_cmd_string "$@")"
+  printf "\n>> %s\n" "$cmd_string"
   "$@"
+  record_history "$label" "$needs_password" "$cmd_string"
+}
+
+status_mark() {
+  if [[ -e "$1" ]]; then
+    printf "[x]"
+  else
+    printf "[ ]"
+  fi
+}
+
+count_dirs() {
+  local dir="$1"
+  if [[ -d "$dir" ]]; then
+    find "$dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' '
+  else
+    printf "0"
+  fi
+}
+
+count_files() {
+  local dir="$1"
+  local pattern="$2"
+  if [[ -d "$dir" ]]; then
+    find "$dir" -type f -name "$pattern" 2>/dev/null | wc -l | tr -d ' '
+  else
+    printf "0"
+  fi
+}
+
+print_ca_status() {
+  printf "CAs:\n"
+  printf "  %s Root\n" "$(status_mark "${ROOT_DIR}/root/certs/root.crt.pem")"
+  printf "  %s Level1\n" "$(status_mark "${ROOT_DIR}/level1/certs/level1.crt.pem")"
+  printf "  %s Level2\n" "$(status_mark "${ROOT_DIR}/level2/certs/level2.crt.pem")"
+  printf "  %s Level3 Client\n" "$(status_mark "${ROOT_DIR}/level3-client/certs/level3-client.crt.pem")"
+  printf "  %s Level3 Server\n" "$(status_mark "${ROOT_DIR}/level3-server/certs/level3-server.crt.pem")"
+}
+
+print_endpoint_status() {
+  printf "Endpoints:\n"
+  printf "  Clients: %s\n" "$(count_dirs "${ROOT_DIR}/output/client")"
+  printf "  Servers: %s\n" "$(count_dirs "${ROOT_DIR}/output/server")"
+}
+
+print_bundle_status() {
+  if [[ -d "${ROOT_DIR}/trust-bundles" ]]; then
+    printf "Bundles: present (delete trust-bundles/ to re-export)\n"
+  else
+    printf "Bundles: none\n"
+  fi
+  printf "  Client PKCS#12: %s\n" "$(count_files "${ROOT_DIR}/trust-bundles/client" "*.p12")"
+  printf "  Client P7B    : %s\n" "$(count_files "${ROOT_DIR}/trust-bundles/client" "*.p7b")"
+  printf "  Server PKCS#12: %s\n" "$(count_files "${ROOT_DIR}/trust-bundles/server" "*.p12")"
+  printf "  Server P7B    : %s\n" "$(count_files "${ROOT_DIR}/trust-bundles/server" "*.p7b")"
+}
+
+print_header() {
+  printf '%s\n' "============================================"
+  printf '%s\n' "$1"
+  printf '%s\n' "--------------------------------------------"
 }
 
 make_root() {
   local cn days bits
-  cn="$(prompt "Root CN (blank for default)")"
-  days="$(prompt "Root days (blank for default)")"
-  bits="$(prompt "Root key bits (blank for default)")"
-  run_cmd "${SCRIPTS_DIR}/make/00_make_root.sh" ${cn:+$cn} ${days:+$days} ${bits:+$bits}
+  cn="$(prompt "Root CN" "$(conf_get root_cn)")"
+  days="$(prompt "Root days" "$(conf_get root_days)")"
+  bits="$(prompt "Root key bits" "$(conf_get root_key_bits)")"
+  local args=()
+  [[ -n "$cn" ]] && args+=("$cn")
+  [[ -n "$days" ]] && args+=("$days")
+  [[ -n "$bits" ]] && args+=("$bits")
+  run_cmd "Make Root" 0 "${SCRIPTS_DIR}/make/00_make_root.sh" "${args[@]}"
 }
 
 make_level1() {
   local cn days bits
-  cn="$(prompt "Level1 CN (blank for default)")"
-  days="$(prompt "Level1 days (blank for default)")"
-  bits="$(prompt "Level1 key bits (blank for default)")"
-  run_cmd "${SCRIPTS_DIR}/make/01_make_level1.sh" ${cn:+$cn} ${days:+$days} ${bits:+$bits}
+  cn="$(prompt "Level1 CN" "$(conf_get level1_cn)")"
+  days="$(prompt "Level1 days" "$(conf_get level1_days)")"
+  bits="$(prompt "Level1 key bits" "$(conf_get level1_key_bits)")"
+  local args=()
+  [[ -n "$cn" ]] && args+=("$cn")
+  [[ -n "$days" ]] && args+=("$days")
+  [[ -n "$bits" ]] && args+=("$bits")
+  run_cmd "Make Level1" 0 "${SCRIPTS_DIR}/make/01_make_level1.sh" "${args[@]}"
 }
 
 make_level2() {
   local cn days bits
-  cn="$(prompt "Level2 CN (blank for default)")"
-  days="$(prompt "Level2 days (blank for default)")"
-  bits="$(prompt "Level2 key bits (blank for default)")"
-  run_cmd "${SCRIPTS_DIR}/make/02_make_level2.sh" ${cn:+$cn} ${days:+$days} ${bits:+$bits}
+  cn="$(prompt "Level2 CN" "$(conf_get level2_cn)")"
+  days="$(prompt "Level2 days" "$(conf_get level2_days)")"
+  bits="$(prompt "Level2 key bits" "$(conf_get level2_key_bits)")"
+  local args=()
+  [[ -n "$cn" ]] && args+=("$cn")
+  [[ -n "$days" ]] && args+=("$days")
+  [[ -n "$bits" ]] && args+=("$bits")
+  run_cmd "Make Level2" 0 "${SCRIPTS_DIR}/make/02_make_level2.sh" "${args[@]}"
 }
 
 make_level3_client() {
   local cn days bits
-  cn="$(prompt "Level3 Client CN (blank for default)")"
-  days="$(prompt "Level3 Client days (blank for default)")"
-  bits="$(prompt "Level3 Client key bits (blank for default)")"
-  run_cmd "${SCRIPTS_DIR}/make/03_make_level3_client.sh" ${cn:+$cn} ${days:+$days} ${bits:+$bits}
+  cn="$(prompt "Level3 Client CN" "$(conf_get level3_client_cn)")"
+  days="$(prompt "Level3 Client days" "$(conf_get level3_client_days)")"
+  bits="$(prompt "Level3 Client key bits" "$(conf_get level3_client_key_bits)")"
+  local args=()
+  [[ -n "$cn" ]] && args+=("$cn")
+  [[ -n "$days" ]] && args+=("$days")
+  [[ -n "$bits" ]] && args+=("$bits")
+  run_cmd "Make Level3 Client" 0 "${SCRIPTS_DIR}/make/03_make_level3_client.sh" "${args[@]}"
 }
 
 make_level3_server() {
   local cn days bits
-  cn="$(prompt "Level3 Server CN (blank for default)")"
-  days="$(prompt "Level3 Server days (blank for default)")"
-  bits="$(prompt "Level3 Server key bits (blank for default)")"
-  run_cmd "${SCRIPTS_DIR}/make/03_make_level3_server.sh" ${cn:+$cn} ${days:+$days} ${bits:+$bits}
+  cn="$(prompt "Level3 Server CN" "$(conf_get level3_server_cn)")"
+  days="$(prompt "Level3 Server days" "$(conf_get level3_server_days)")"
+  bits="$(prompt "Level3 Server key bits" "$(conf_get level3_server_key_bits)")"
+  local args=()
+  [[ -n "$cn" ]] && args+=("$cn")
+  [[ -n "$days" ]] && args+=("$days")
+  [[ -n "$bits" ]] && args+=("$bits")
+  run_cmd "Make Level3 Server" 0 "${SCRIPTS_DIR}/make/03_make_level3_server.sh" "${args[@]}"
 }
 
 make_full_chain() {
-  run_cmd "${SCRIPTS_DIR}/make/00_make_root.sh"
-  run_cmd "${SCRIPTS_DIR}/make/01_make_level1.sh"
-  run_cmd "${SCRIPTS_DIR}/make/02_make_level2.sh"
-  run_cmd "${SCRIPTS_DIR}/make/03_make_level3_client.sh"
-  run_cmd "${SCRIPTS_DIR}/make/03_make_level3_server.sh"
+  run_cmd "Make Root" 0 "${SCRIPTS_DIR}/make/00_make_root.sh"
+  run_cmd "Make Level1" 0 "${SCRIPTS_DIR}/make/01_make_level1.sh"
+  run_cmd "Make Level2" 0 "${SCRIPTS_DIR}/make/02_make_level2.sh"
+  run_cmd "Make Level3 Client" 0 "${SCRIPTS_DIR}/make/03_make_level3_client.sh"
+  run_cmd "Make Level3 Server" 0 "${SCRIPTS_DIR}/make/03_make_level3_server.sh"
 }
 
 issue_client() {
   local cn days bits
-  cn="$(prompt "Client CN (blank for default)")"
-  days="$(prompt "Client days (blank for default)")"
-  bits="$(prompt "Client key bits (blank for default)")"
-  run_cmd "${SCRIPTS_DIR}/make/04_make_client.sh" ${cn:+$cn} ${days:+$days} ${bits:+$bits}
+  cn="$(prompt "Client CN" "$(conf_get client_cn)")"
+  days="$(prompt "Client days" "$(conf_get client_days)")"
+  bits="$(prompt "Client key bits" "$(conf_get client_key_bits)")"
+  local args=()
+  [[ -n "$cn" ]] && args+=("$cn")
+  [[ -n "$days" ]] && args+=("$days")
+  [[ -n "$bits" ]] && args+=("$bits")
+  run_cmd "Issue Client" 0 "${SCRIPTS_DIR}/make/04_make_client.sh" "${args[@]}"
 }
 
 issue_client_from_csr() {
   local name csr days
   name="$(prompt "Client name")"
   csr="$(prompt "CSR path")"
-  days="$(prompt "Days (blank for default)")"
-  run_cmd "${SCRIPTS_DIR}/make/04_make_client_from_csr.sh" "$name" "$csr" ${days:+$days}
+  days="$(prompt "Days" "$(conf_get client_days)")"
+  local args=("$name" "$csr")
+  [[ -n "$days" ]] && args+=("$days")
+  run_cmd "Issue Client from CSR" 0 "${SCRIPTS_DIR}/make/04_make_client_from_csr.sh" "${args[@]}"
 }
 
 issue_server() {
   local cn san days bits
   cn="$(prompt "Server CN")"
-  san="$(prompt "Server SAN (e.g., DNS:api.example.local)")"
-  days="$(prompt "Server days (blank for default)")"
-  bits="$(prompt "Server key bits (blank for default)")"
-  run_cmd "${SCRIPTS_DIR}/make/04_make_server.sh" "$cn" "$san" ${days:+$days} ${bits:+$bits}
+  san="$(prompt "Server SAN (e.g., DNS:api.example.local)" "$(conf_get server_san)")"
+  days="$(prompt "Server days" "$(conf_get server_days)")"
+  bits="$(prompt "Server key bits" "$(conf_get server_key_bits)")"
+  local args=("$cn" "$san")
+  [[ -n "$days" ]] && args+=("$days")
+  [[ -n "$bits" ]] && args+=("$bits")
+  run_cmd "Issue Server" 0 "${SCRIPTS_DIR}/make/04_make_server.sh" "${args[@]}"
 }
 
 issue_server_from_csr() {
   local name csr san days
   name="$(prompt "Server name")"
   csr="$(prompt "CSR path")"
-  san="$(prompt "SAN (e.g., DNS:api.example.local)")"
-  days="$(prompt "Days (blank for default)")"
-  run_cmd "${SCRIPTS_DIR}/make/04_make_server_from_csr.sh" "$name" "$csr" ${san:+$san} ${days:+$days}
+  san="$(prompt "SAN (e.g., DNS:api.example.local)" "$(conf_get server_san)")"
+  days="$(prompt "Days" "$(conf_get server_days)")"
+  local args=("$name" "$csr")
+  [[ -n "$san" ]] && args+=("$san")
+  [[ -n "$days" ]] && args+=("$days")
+  run_cmd "Issue Server from CSR" 0 "${SCRIPTS_DIR}/make/04_make_server_from_csr.sh" "${args[@]}"
 }
 
 export_root() {
-  run_cmd "${SCRIPTS_DIR}/export/00_export_root.sh"
+  run_cmd "Export Root" 0 "${SCRIPTS_DIR}/export/00_export_root.sh"
 }
 
 export_signer_level1() {
-  run_cmd "${SCRIPTS_DIR}/export/01_export_signer_level1.sh"
+  run_cmd "Export Signer Level1" 0 "${SCRIPTS_DIR}/export/01_export_signer_level1.sh"
 }
 
 export_signer_level2() {
-  run_cmd "${SCRIPTS_DIR}/export/02_export_signer_level2.sh"
+  run_cmd "Export Signer Level2" 0 "${SCRIPTS_DIR}/export/02_export_signer_level2.sh"
 }
 
 export_signer_level3_client() {
-  run_cmd "${SCRIPTS_DIR}/export/03_export_signer_level3_client.sh"
+  run_cmd "Export Signer Level3 Client" 0 "${SCRIPTS_DIR}/export/03_export_signer_level3_client.sh"
 }
 
 export_signer_level3_server() {
-  run_cmd "${SCRIPTS_DIR}/export/03_export_signer_level3_server.sh"
+  run_cmd "Export Signer Level3 Server" 0 "${SCRIPTS_DIR}/export/03_export_signer_level3_server.sh"
 }
 
 export_client() {
-  local name
+  local name alias password
   name="$(prompt "Client name")"
-  run_cmd "${SCRIPTS_DIR}/export/04_export_client.sh" "$name"
+  alias="$(prompt "Alias (blank for default)")"
+  password="$(prompt_secret "Password (blank to use P12_PASSWORD)")"
+  if [[ -n "$password" ]]; then
+    P12_PASSWORD="$password" run_cmd "Export Client Bundle" 1 "${SCRIPTS_DIR}/export/04_export_client.sh" "$name" ${alias:+$alias}
+  else
+    run_cmd "Export Client Bundle" 1 "${SCRIPTS_DIR}/export/04_export_client.sh" "$name" ${alias:+$alias}
+  fi
 }
 
 export_server() {
@@ -153,46 +302,48 @@ export_server() {
   alias="$(prompt "Alias (blank for default)")"
   password="$(prompt_secret "Password (blank to use P12_PASSWORD)")"
   if [[ -n "$password" ]]; then
-    P12_PASSWORD="$password" run_cmd "${SCRIPTS_DIR}/export/04_export_server.sh" "$name" ${alias:+$alias} "$password"
+    P12_PASSWORD="$password" run_cmd "Export Server Bundle" 1 "${SCRIPTS_DIR}/export/04_export_server.sh" "$name" ${alias:+$alias}
   else
-    run_cmd "${SCRIPTS_DIR}/export/04_export_server.sh" "$name" ${alias:+$alias}
+    run_cmd "Export Server Bundle" 1 "${SCRIPTS_DIR}/export/04_export_server.sh" "$name" ${alias:+$alias}
   fi
 }
 
 import_root() {
   local bundle
   bundle="$(prompt "Bundle dir (blank for default trust-bundles)")"
-  run_cmd "${SCRIPTS_DIR}/import/00_import_root.sh" ${bundle:+$bundle}
+  run_cmd "Import Root" 0 "${SCRIPTS_DIR}/import/00_import_root.sh" ${bundle:+$bundle}
 }
 
 import_level1() {
   local bundle
   bundle="$(prompt "Bundle dir (blank for default trust-bundles)")"
-  run_cmd "${SCRIPTS_DIR}/import/01_import_level1.sh" ${bundle:+$bundle}
+  run_cmd "Import Level1" 0 "${SCRIPTS_DIR}/import/01_import_level1.sh" ${bundle:+$bundle}
 }
 
 import_level2() {
   local bundle
   bundle="$(prompt "Bundle dir (blank for default trust-bundles)")"
-  run_cmd "${SCRIPTS_DIR}/import/02_import_level2.sh" ${bundle:+$bundle}
+  run_cmd "Import Level2" 0 "${SCRIPTS_DIR}/import/02_import_level2.sh" ${bundle:+$bundle}
 }
 
 import_level3_client() {
   local bundle
   bundle="$(prompt "Bundle dir (blank for default trust-bundles)")"
-  run_cmd "${SCRIPTS_DIR}/import/03_import_level3_client.sh" ${bundle:+$bundle}
+  run_cmd "Import Level3 Client" 0 "${SCRIPTS_DIR}/import/03_import_level3_client.sh" ${bundle:+$bundle}
 }
 
 import_level3_server() {
   local bundle
   bundle="$(prompt "Bundle dir (blank for default trust-bundles)")"
-  run_cmd "${SCRIPTS_DIR}/import/03_import_level3_server.sh" ${bundle:+$bundle}
+  run_cmd "Import Level3 Server" 0 "${SCRIPTS_DIR}/import/03_import_level3_server.sh" ${bundle:+$bundle}
 }
 
 menu_make() {
   while true; do
     clear_screen
-    printf "PKI Admin - Make CAs\n"
+    print_header "PKI Admin - Make CAs"
+    print_ca_status
+    printf "\n"
     printf "1) Make Root\n"
     printf "2) Make Level1\n"
     printf "3) Make Level2\n"
@@ -217,7 +368,10 @@ menu_make() {
 menu_issue() {
   while true; do
     clear_screen
-    printf "PKI Admin - Issue Certs\n"
+    print_header "PKI Admin - Issue Certs"
+    print_ca_status
+    print_endpoint_status
+    printf "\n"
     printf "1) Issue Client Cert\n"
     printf "2) Issue Client Cert from CSR\n"
     printf "3) Issue Server Cert\n"
@@ -238,7 +392,9 @@ menu_issue() {
 menu_export() {
   while true; do
     clear_screen
-    printf "PKI Admin - Export Bundles\n"
+    print_header "PKI Admin - Export Bundles"
+    print_bundle_status
+    printf "\n"
     printf "1) Export Root\n"
     printf "2) Export Signer Level1\n"
     printf "3) Export Signer Level2\n"
@@ -265,7 +421,9 @@ menu_export() {
 menu_import() {
   while true; do
     clear_screen
-    printf "PKI Admin - Import Bundles\n"
+    print_header "PKI Admin - Import Bundles"
+    print_bundle_status
+    printf "\n"
     printf "1) Import Root\n"
     printf "2) Import Level1\n"
     printf "3) Import Level2\n"
@@ -288,11 +446,16 @@ menu_import() {
 main_menu() {
   while true; do
     clear_screen
-    printf "PKI Admin\n"
+    print_header "PKI Admin"
+    print_ca_status
+    print_endpoint_status
+    print_bundle_status
+    printf "\n"
     printf "1) Make CAs\n"
     printf "2) Issue Certs\n"
     printf "3) Export Bundles\n"
     printf "4) Import Bundles\n"
+    printf "5) History\n"
     printf "0) Exit\n"
     read -r -p "Select: " choice
     case "$choice" in
@@ -300,8 +463,147 @@ main_menu() {
       2) menu_issue ;;
       3) menu_export ;;
       4) menu_import ;;
+      5) menu_history ;;
       0) exit 0 ;;
       *) printf "Invalid choice\n"; pause ;;
+    esac
+  done
+}
+
+menu_history() {
+  local lines entry selection action cmd label needs_password ts password
+  local -a cmd_array
+  local script_base
+  local hist_arg
+  hist_arg() {
+    local idx="$1"
+    local fallback="$2"
+    if [[ ${cmd_array[$idx]+set} ]]; then
+      printf '%s' "${cmd_array[$idx]}"
+    else
+      printf '%s' "$fallback"
+    fi
+  }
+  while true; do
+    clear_screen
+    print_header "PKI Admin - History"
+    if [[ ! -f "$HISTORY_FILE" ]]; then
+      printf "No history yet.\n"
+      pause
+      return
+    fi
+    lines="$(tail -n 10 "$HISTORY_FILE")"
+    printf "Last 10 commands:\n"
+    printf "%s\n" "$lines" | nl -w2 -s') '
+    printf "\nSelect entry number or 0 to back.\n"
+    read -r -p "Select: " selection
+    if [[ "$selection" == "0" ]]; then
+      return
+    fi
+    entry="$(printf "%s\n" "$lines" | sed -n "${selection}p")"
+    if [[ -z "$entry" ]]; then
+      printf "Invalid selection\n"
+      pause
+      continue
+    fi
+    IFS='|' read -r ts label needs_password cmd <<< "$entry"
+    printf "\n[%s] %s\n%s\n" "$ts" "$label" "$cmd"
+    read -r -p "Action: (r)erun, (e)dit, (b)ack: " action
+    case "$action" in
+      r|R)
+        cmd_array=()
+        eval "cmd_array=($cmd)"
+        if [[ "$needs_password" == "1" ]]; then
+          password="$(prompt_secret "Password")"
+          run_history_command "$label" "$needs_password" "$password" "${cmd_array[@]}"
+        else
+          run_history_command "$label" "$needs_password" "" "${cmd_array[@]}"
+        fi
+        pause
+        ;;
+      e|E)
+        cmd_array=()
+        eval "cmd_array=($cmd)"
+        script_base="$(basename "${cmd_array[0]}")"
+        case "$script_base" in
+          00_make_root.sh)
+            cmd_array[1]="$(prompt "Root CN" "$(hist_arg 1 "$(conf_get root_cn)")")"
+            cmd_array[2]="$(prompt "Root days" "$(hist_arg 2 "$(conf_get root_days)")")"
+            cmd_array[3]="$(prompt "Root key bits" "$(hist_arg 3 "$(conf_get root_key_bits)")")"
+            ;;
+          01_make_level1.sh)
+            cmd_array[1]="$(prompt "Level1 CN" "$(hist_arg 1 "$(conf_get level1_cn)")")"
+            cmd_array[2]="$(prompt "Level1 days" "$(hist_arg 2 "$(conf_get level1_days)")")"
+            cmd_array[3]="$(prompt "Level1 key bits" "$(hist_arg 3 "$(conf_get level1_key_bits)")")"
+            ;;
+          02_make_level2.sh)
+            cmd_array[1]="$(prompt "Level2 CN" "$(hist_arg 1 "$(conf_get level2_cn)")")"
+            cmd_array[2]="$(prompt "Level2 days" "$(hist_arg 2 "$(conf_get level2_days)")")"
+            cmd_array[3]="$(prompt "Level2 key bits" "$(hist_arg 3 "$(conf_get level2_key_bits)")")"
+            ;;
+          03_make_level3_client.sh)
+            cmd_array[1]="$(prompt "Level3 Client CN" "$(hist_arg 1 "$(conf_get level3_client_cn)")")"
+            cmd_array[2]="$(prompt "Level3 Client days" "$(hist_arg 2 "$(conf_get level3_client_days)")")"
+            cmd_array[3]="$(prompt "Level3 Client key bits" "$(hist_arg 3 "$(conf_get level3_client_key_bits)")")"
+            ;;
+          03_make_level3_server.sh)
+            cmd_array[1]="$(prompt "Level3 Server CN" "$(hist_arg 1 "$(conf_get level3_server_cn)")")"
+            cmd_array[2]="$(prompt "Level3 Server days" "$(hist_arg 2 "$(conf_get level3_server_days)")")"
+            cmd_array[3]="$(prompt "Level3 Server key bits" "$(hist_arg 3 "$(conf_get level3_server_key_bits)")")"
+            ;;
+          04_make_client.sh)
+            cmd_array[1]="$(prompt "Client CN" "$(hist_arg 1 "$(conf_get client_cn)")")"
+            cmd_array[2]="$(prompt "Client days" "$(hist_arg 2 "$(conf_get client_days)")")"
+            cmd_array[3]="$(prompt "Client key bits" "$(hist_arg 3 "$(conf_get client_key_bits)")")"
+            ;;
+          04_make_client_from_csr.sh)
+            cmd_array[1]="$(prompt "Client name" "$(hist_arg 1 "")")"
+            cmd_array[2]="$(prompt "CSR path" "$(hist_arg 2 "")")"
+            cmd_array[3]="$(prompt "Days" "$(hist_arg 3 "$(conf_get client_days)")")"
+            ;;
+          04_make_server.sh)
+            cmd_array[1]="$(prompt "Server CN" "$(hist_arg 1 "")")"
+            cmd_array[2]="$(prompt "Server SAN" "$(hist_arg 2 "$(conf_get server_san)")")"
+            cmd_array[3]="$(prompt "Server days" "$(hist_arg 3 "$(conf_get server_days)")")"
+            cmd_array[4]="$(prompt "Server key bits" "$(hist_arg 4 "$(conf_get server_key_bits)")")"
+            ;;
+          04_make_server_from_csr.sh)
+            cmd_array[1]="$(prompt "Server name" "$(hist_arg 1 "")")"
+            cmd_array[2]="$(prompt "CSR path" "$(hist_arg 2 "")")"
+            cmd_array[3]="$(prompt "SAN" "$(hist_arg 3 "$(conf_get server_san)")")"
+            cmd_array[4]="$(prompt "Days" "$(hist_arg 4 "$(conf_get server_days)")")"
+            ;;
+          04_export_client.sh)
+            cmd_array[1]="$(prompt "Client name" "$(hist_arg 1 "")")"
+            cmd_array[2]="$(prompt "Alias (blank for default)" "$(hist_arg 2 "")")"
+            ;;
+          04_export_server.sh)
+            cmd_array[1]="$(prompt "Server name" "$(hist_arg 1 "")")"
+            cmd_array[2]="$(prompt "Alias (blank for default)" "$(hist_arg 2 "")")"
+            ;;
+          00_import_root.sh|01_import_level1.sh|02_import_level2.sh|03_import_level3_client.sh|03_import_level3_server.sh)
+            cmd_array[1]="$(prompt "Bundle dir (blank for default trust-bundles)" "$(hist_arg 1 "")")"
+            ;;
+          *)
+            read -r -p "New command: " cmd
+            if [[ -z "$cmd" ]]; then
+              printf "No command provided\n"
+              pause
+              continue
+            fi
+            cmd_array=()
+            eval "cmd_array=($cmd)"
+            ;;
+        esac
+        if [[ "$needs_password" == "1" ]]; then
+          password="$(prompt_secret "Password")"
+          run_history_command "$label" "$needs_password" "$password" "${cmd_array[@]}"
+        else
+          run_history_command "$label" "$needs_password" "" "${cmd_array[@]}"
+        fi
+        pause
+        ;;
+      *) ;;
     esac
   done
 }

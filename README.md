@@ -69,7 +69,7 @@ Export trust bundles for a signer level (creates `trust-bundles/` once):
 ./scripts/export/03_export_signer_level3_server.sh
 ```
 
-Export a client PKCS#12 bundle:
+Export a client bundle (PKCS#12 if key exists, otherwise .p7b):
 
 ```bash
 ./scripts/export/04_export_client.sh "client-001"

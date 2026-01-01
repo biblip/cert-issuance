@@ -41,7 +41,7 @@ trust bundles for distribution.
 - `scripts/export/02_export_signer_level2.sh`: export root/level1 certs + level 2 signer key/cert
 - `scripts/export/03_export_signer_level3_client.sh`: export root/level1/level2 certs + level 3 client signer key/cert
 - `scripts/export/03_export_signer_level3_server.sh`: export root/level1/level2 certs + level 3 server signer key/cert
-- `scripts/export/04_export_client.sh`: export client PKCS#12 to `trust-bundles/client/<name>/`
+- `scripts/export/04_export_client.sh`: export client bundle (PKCS#12 if key exists, otherwise .p7b)
 - `scripts/export/04_export_server.sh`: export server bundle (PKCS#12 if key exists, otherwise .p7b)
 
 ## Import scripts
