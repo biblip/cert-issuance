@@ -96,3 +96,11 @@ Examples:
 
 - Scripts refuse to overwrite existing keys/certs.
 - Clean or rename artifacts if you need to regenerate them.
+
+## USB CSR workflow
+
+The admin menu can sign CSR requests from a USB mounted under
+`/media/$USER/<usbname>/csr-list/`. Each CSR directory must include a
+`config.conf` (key=value) and a `*.csr.pem` file. Requests are processed in
+batch, and outputs are written back into the same CSR directory as `.p12` (if a
+private key exists locally) or `.p7b` otherwise.

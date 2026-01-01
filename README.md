@@ -124,3 +124,33 @@ Run the admin menu:
 ```bash
 ./scripts/admin.sh
 ```
+
+## USB CSR workflow
+
+To sign CSR requests from a USB, mount the device under `/media/$USER/<usbname>`
+and create a `csr-list/` directory containing one subdirectory per request.
+Each request directory must include a `config.conf` file (INI-style key=value)
+and a CSR file (`*.csr.pem`).
+
+Example layout:
+
+```text
+/media/$USER/USB_NAME/csr-list/request-001/
+  config.conf
+  server.csr.pem
+```
+
+Example `config.conf`:
+
+```
+type = server
+name = api.example.local
+san = DNS:api.example.local
+days = 825
+alias = api.example.local
+password =
+```
+
+`type` must be `server` or `client`. The admin menu will sign every request in
+`csr-list/` and export results back into each request directory. If a private
+key is present locally, a `.p12` is emitted; otherwise a `.p7b` chain is written.

@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPTS_DIR="${ROOT_DIR}/scripts"
 HISTORY_FILE="${ROOT_DIR}/.admin_history"
 EXTFILE="${ROOT_DIR}/conf/ca_ext.cnf"
+USB_ROOT="/media/${USER:-$(id -un)}"
 
 clear_screen() {
   printf "\033c"
@@ -36,6 +37,10 @@ prompt_secret() {
   printf '%s' "$value"
 }
 
+sanitize_name() {
+  printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_' | tr -s '_' '_'
+}
+
 conf_get() {
   local key="$1"
   awk -F' *= *' -v section="defaults" -v key="$key" '
@@ -43,6 +48,199 @@ conf_get() {
     $0 ~ "^\\[" { in_section=0 }
     in_section && $1 == key { print $2; exit }
   ' "$EXTFILE"
+}
+
+usb_list() {
+  mount | awk -v user="$USER" '$3 ~ "^/media/"user"/" {print $3}' | sort -u
+}
+
+usb_csr_roots() {
+  local m
+  local -a mounts
+  mapfile -t mounts < <(usb_list)
+  for m in "${mounts[@]}"; do
+    if [[ -d "$m/csr-list" ]]; then
+      printf '%s/csr-list\n' "$m"
+    fi
+  done
+}
+
+parse_kv_config() {
+  local file="$1"
+  local line key val
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+    key="${line%%=*}"
+    val="${line#*=}"
+    key="$(printf '%s' "$key" | tr -d '[:space:]')"
+    val="$(printf '%s' "$val" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    case "$key" in
+      type|name|csr|san|days|alias|password) printf '%s=%s\n' "$key" "$val" ;;
+    esac
+  done < "$file"
+}
+
+load_csr_request() {
+  local dir="$1"
+  local cfg="$dir/config.conf"
+  local kv
+  if [[ ! -f "$cfg" ]]; then
+    printf "Missing config.conf in %s\n" "$dir"
+    return 1
+  fi
+  while IFS= read -r kv; do
+    case "$kv" in
+      type=*) CSR_TYPE="${kv#type=}" ;;
+      name=*) CSR_NAME="${kv#name=}" ;;
+      csr=*) CSR_PATH="${kv#csr=}" ;;
+      san=*) CSR_SAN="${kv#san=}" ;;
+      days=*) CSR_DAYS="${kv#days=}" ;;
+      alias=*) CSR_ALIAS="${kv#alias=}" ;;
+      password=*) CSR_PASSWORD="${kv#password=}" ;;
+    esac
+  done < <(parse_kv_config "$cfg")
+  if [[ -z "${CSR_TYPE:-}" || -z "${CSR_NAME:-}" ]]; then
+    printf "Missing required fields in %s (type, name)\n" "$cfg"
+    return 1
+  fi
+  if [[ -z "${CSR_PATH:-}" ]]; then
+    CSR_PATH="$(find "$dir" -maxdepth 1 -type f \( -name "*.csr.pem" -o -name "*.csr" \) | head -n1)"
+  else
+    CSR_PATH="$dir/$CSR_PATH"
+  fi
+  if [[ ! -f "$CSR_PATH" ]]; then
+    printf "Missing CSR file in %s\n" "$dir"
+    return 1
+  fi
+  if [[ -z "${CSR_DAYS:-}" ]]; then
+    if [[ "$CSR_TYPE" == "server" ]]; then
+      CSR_DAYS="$(conf_get server_days)"
+    else
+      CSR_DAYS="$(conf_get client_days)"
+    fi
+  fi
+  if [[ "$CSR_TYPE" == "server" && -z "${CSR_SAN:-}" ]]; then
+    CSR_SAN="$(conf_get server_san)"
+  fi
+  return 0
+}
+
+export_chain_to_dir() {
+  local type="$1"
+  local name="$2"
+  local dest_dir="$3"
+  local alias="$4"
+  local password="$5"
+  local safe_name key crt chain_tmp out_p12 out_p7b
+  safe_name="$(sanitize_name "$name")"
+  if [[ "$type" == "server" ]]; then
+    key="${ROOT_DIR}/output/server/${safe_name}/private/${safe_name}.key.pem"
+    crt="${ROOT_DIR}/output/server/${safe_name}/cert/${safe_name}.crt.pem"
+  else
+    key="${ROOT_DIR}/output/client/${safe_name}/private/${safe_name}.key.pem"
+    crt="${ROOT_DIR}/output/client/${safe_name}/cert/${safe_name}.crt.pem"
+  fi
+  out_p12="${dest_dir}/${safe_name}.p12"
+  out_p7b="${dest_dir}/${safe_name}.p7b"
+  chain_tmp="$(mktemp)"
+  trap 'rm -f "$chain_tmp"' RETURN
+  cat /dev/null > "$chain_tmp"
+  if [[ "$type" == "server" ]]; then
+    [[ -f "${ROOT_DIR}/level3-server/certs/level3-server.crt.pem" ]] && cat "${ROOT_DIR}/level3-server/certs/level3-server.crt.pem" >> "$chain_tmp"
+  else
+    [[ -f "${ROOT_DIR}/level3-client/certs/level3-client.crt.pem" ]] && cat "${ROOT_DIR}/level3-client/certs/level3-client.crt.pem" >> "$chain_tmp"
+  fi
+  [[ -f "${ROOT_DIR}/level2/certs/level2.crt.pem" ]] && cat "${ROOT_DIR}/level2/certs/level2.crt.pem" >> "$chain_tmp"
+  [[ -f "${ROOT_DIR}/level1/certs/level1.crt.pem" ]] && cat "${ROOT_DIR}/level1/certs/level1.crt.pem" >> "$chain_tmp"
+  [[ -f "${ROOT_DIR}/root/certs/root.crt.pem" ]] && cat "${ROOT_DIR}/root/certs/root.crt.pem" >> "$chain_tmp"
+  if [[ -f "$key" ]]; then
+    if [[ -z "$password" ]]; then
+      printf "Missing password for %s; skipping PKCS#12.\n" "$name"
+    else
+      if [[ -s "$chain_tmp" ]]; then
+        openssl pkcs12 -export \
+          -name "$alias" \
+          -inkey "$key" \
+          -in "$crt" \
+          -certfile "$chain_tmp" \
+          -out "$out_p12" \
+          -passout pass:"$password"
+      else
+        openssl pkcs12 -export \
+          -name "$alias" \
+          -inkey "$key" \
+          -in "$crt" \
+          -out "$out_p12" \
+          -passout pass:"$password"
+      fi
+      printf "Exported PKCS#12: %s\n" "$out_p12"
+    fi
+  else
+    if [[ -s "$chain_tmp" ]]; then
+      cat "$crt" "$chain_tmp" | openssl crl2pkcs7 -nocrl -certfile /dev/stdin -out "$out_p7b"
+    else
+      openssl crl2pkcs7 -nocrl -certfile "$crt" -out "$out_p7b"
+    fi
+    printf "Exported P7B: %s\n" "$out_p7b"
+  fi
+}
+
+issue_from_usb() {
+  local csr_root dir
+  local -a roots
+  local count=0
+  printf "USB scan (verbose): mounts under %s\n" "$USB_ROOT"
+  mapfile -t roots < <(usb_csr_roots)
+  if [[ ${#roots[@]} -eq 0 ]]; then
+    printf "USB scan (verbose): no csr-list directories found.\n"
+    pause
+    return
+  fi
+  printf "USB scan (verbose): csr-list directories:\n"
+  printf "%s\n" "${roots[@]}"
+  for csr_root in "${roots[@]}"; do
+    local log
+    log="${csr_root}/process.log"
+    printf "PKI USB processing log - %s\n" "$(date +%Y-%m-%dT%H:%M:%S)" >> "$log"
+    for dir in "$csr_root"/*; do
+      [[ -d "$dir" ]] || continue
+      CSR_TYPE=""; CSR_NAME=""; CSR_PATH=""; CSR_SAN=""; CSR_DAYS=""; CSR_ALIAS=""; CSR_PASSWORD=""
+      if ! load_csr_request "$dir"; then
+        printf "Skipping %s\n" "$dir"
+        printf "[%s] Skipped %s (config/CSR invalid)\n" "$(date +%H:%M:%S)" "$dir" >> "$log"
+        continue
+      fi
+      printf "\nSigning %s (%s)\n" "$CSR_NAME" "$CSR_TYPE"
+      printf "[%s] Start %s (%s)\n" "$(date +%H:%M:%S)" "$CSR_NAME" "$CSR_TYPE" >> "$log"
+      if [[ "$CSR_TYPE" == "server" ]]; then
+        run_cmd "Issue Server from CSR (USB)" 0 "${SCRIPTS_DIR}/make/04_make_server_from_csr.sh" "$CSR_NAME" "$CSR_PATH" "${CSR_SAN}" "${CSR_DAYS}"
+      elif [[ "$CSR_TYPE" == "client" ]]; then
+        run_cmd "Issue Client from CSR (USB)" 0 "${SCRIPTS_DIR}/make/04_make_client_from_csr.sh" "$CSR_NAME" "$CSR_PATH" "${CSR_DAYS}"
+      else
+        printf "Unknown type '%s' in %s\n" "$CSR_TYPE" "$dir"
+        printf "[%s] Unknown type '%s' in %s\n" "$(date +%H:%M:%S)" "$CSR_TYPE" "$dir" >> "$log"
+        continue
+      fi
+      mkdir -p "$dir"
+      local safe_name cert_path
+      safe_name="$(sanitize_name "$CSR_NAME")"
+      if [[ "$CSR_TYPE" == "server" ]]; then
+        cert_path="${ROOT_DIR}/output/server/${safe_name}/cert/${safe_name}.crt.pem"
+      else
+        cert_path="${ROOT_DIR}/output/client/${safe_name}/cert/${safe_name}.crt.pem"
+      fi
+      if [[ -f "$cert_path" ]]; then
+        cp -p "$cert_path" "$dir/${safe_name}.crt.pem"
+      fi
+      export_chain_to_dir "$CSR_TYPE" "$CSR_NAME" "$dir" "${CSR_ALIAS:-$safe_name}" "${CSR_PASSWORD:-}"
+      printf "[%s] Done %s\n" "$(date +%H:%M:%S)" "$CSR_NAME" >> "$log"
+      count=$((count+1))
+    done
+    printf "[%s] Completed %d request(s)\n" "$(date +%H:%M:%S)" "$count" >> "$log"
+  done
+  printf "\nProcessed %d request(s).\n" "$count"
+  pause
 }
 
 build_cmd_string() {
@@ -376,6 +574,7 @@ menu_issue() {
     printf "2) Issue Client Cert from CSR\n"
     printf "3) Issue Server Cert\n"
     printf "4) Issue Server Cert from CSR\n"
+    printf "5) Issue from USB (csr-list)\n"
     printf "0) Back\n"
     read -r -p "Select: " choice
     case "$choice" in
@@ -383,6 +582,7 @@ menu_issue() {
       2) issue_client_from_csr; pause ;;
       3) issue_server; pause ;;
       4) issue_server_from_csr; pause ;;
+      5) issue_from_usb ;;
       0) return ;;
       *) printf "Invalid choice\n"; pause ;;
     esac
