@@ -16,6 +16,7 @@ trust bundles for distribution.
 
 - `conf/ca_ext.cnf`: shared X.509 extensions and default CN/days/key bits
 - `scripts/`: CA/client creation plus export/import helpers
+- `scripts/admin.sh`: interactive ASCII admin menu (pure bash)
 - `root/`, `level1/`, `level2/`, `level3-client/`, `level3-server/`: CA keys/certs/CSRs
 - `output/client/`: per-client keys/certs/CSRs
 - `output/server/`: per-server keys/certs/CSRs
@@ -41,7 +42,7 @@ trust bundles for distribution.
 - `scripts/export/03_export_signer_level3_client.sh`: export root/level1/level2 certs + level 3 client signer key/cert
 - `scripts/export/03_export_signer_level3_server.sh`: export root/level1/level2 certs + level 3 server signer key/cert
 - `scripts/export/04_export_client.sh`: export client PKCS#12 to `trust-bundles/client/<name>/`
-- `scripts/export/04_export_server.sh`: export server PKCS#12 to `trust-bundles/server/<name>/`
+- `scripts/export/04_export_server.sh`: export server bundle (PKCS#12 if key exists, otherwise .p7b)
 
 ## Import scripts
 

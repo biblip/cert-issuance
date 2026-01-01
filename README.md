@@ -12,6 +12,7 @@ stored in `conf/ca_ext.cnf` and each script can take overrides via CLI args.
 
 - `conf/ca_ext.cnf`: shared extensions and default CN/days/key bits
 - `scripts/`: make/export/import helpers (see subdirectories)
+- `scripts/admin.sh`: interactive ASCII admin menu (pure bash)
 - `root/`, `level1/`, `level2/`, `level3-client/`, `level3-server/`: CA keys/certs/CSRs
 - `output/client/`: per-client keys/certs/CSRs
 - `output/server/`: per-server keys/certs/CSRs
@@ -74,7 +75,7 @@ Export a client PKCS#12 bundle:
 ./scripts/export/04_export_client.sh "client-001"
 ```
 
-Export a server PKCS#12 bundle:
+Export a server bundle (PKCS#12 if key exists, otherwise .p7b):
 
 ```bash
 ./scripts/export/04_export_server.sh "server-001"
@@ -118,3 +119,8 @@ Defaults are pulled from `conf/ca_ext.cnf` when arguments are omitted. Scripts
 refuse to overwrite existing keys/certs, so clean or rename artifacts if you
 need to regenerate them. Export scripts also refuse to run if `trust-bundles/`
 already exists; delete it manually to re-export.
+Run the admin menu:
+
+```bash
+./scripts/admin.sh
+```
