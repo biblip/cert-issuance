@@ -143,8 +143,9 @@ export_chain_to_dir() {
   fi
   out_p12="${dest_dir}/${safe_name}.p12"
   out_p7b="${dest_dir}/${safe_name}.p7b"
+  chain_tmp=""
   chain_tmp="$(mktemp)"
-  trap 'rm -f "$chain_tmp"' RETURN
+  trap 'rm -f "${chain_tmp:-}"' RETURN
   cat /dev/null > "$chain_tmp"
   if [[ "$type" == "server" ]]; then
     [[ -f "${ROOT_DIR}/level3-server/certs/level3-server.crt.pem" ]] && cat "${ROOT_DIR}/level3-server/certs/level3-server.crt.pem" >> "$chain_tmp"
@@ -200,26 +201,20 @@ issue_from_usb() {
   printf "USB scan (verbose): csr-list directories:\n"
   printf "%s\n" "${roots[@]}"
   for csr_root in "${roots[@]}"; do
-    local log
-    log="${csr_root}/process.log"
-    printf "PKI USB processing log - %s\n" "$(date +%Y-%m-%dT%H:%M:%S)" >> "$log"
     for dir in "$csr_root"/*; do
       [[ -d "$dir" ]] || continue
       CSR_TYPE=""; CSR_NAME=""; CSR_PATH=""; CSR_SAN=""; CSR_DAYS=""; CSR_ALIAS=""; CSR_PASSWORD=""
       if ! load_csr_request "$dir"; then
         printf "Skipping %s\n" "$dir"
-        printf "[%s] Skipped %s (config/CSR invalid)\n" "$(date +%H:%M:%S)" "$dir" >> "$log"
         continue
       fi
       printf "\nSigning %s (%s)\n" "$CSR_NAME" "$CSR_TYPE"
-      printf "[%s] Start %s (%s)\n" "$(date +%H:%M:%S)" "$CSR_NAME" "$CSR_TYPE" >> "$log"
       if [[ "$CSR_TYPE" == "server" ]]; then
         run_cmd "Issue Server from CSR (USB)" 0 "${SCRIPTS_DIR}/make/04_make_server_from_csr.sh" "$CSR_NAME" "$CSR_PATH" "${CSR_SAN}" "${CSR_DAYS}"
       elif [[ "$CSR_TYPE" == "client" ]]; then
         run_cmd "Issue Client from CSR (USB)" 0 "${SCRIPTS_DIR}/make/04_make_client_from_csr.sh" "$CSR_NAME" "$CSR_PATH" "${CSR_DAYS}"
       else
         printf "Unknown type '%s' in %s\n" "$CSR_TYPE" "$dir"
-        printf "[%s] Unknown type '%s' in %s\n" "$(date +%H:%M:%S)" "$CSR_TYPE" "$dir" >> "$log"
         continue
       fi
       mkdir -p "$dir"
@@ -234,10 +229,8 @@ issue_from_usb() {
         cp -p "$cert_path" "$dir/${safe_name}.crt.pem"
       fi
       export_chain_to_dir "$CSR_TYPE" "$CSR_NAME" "$dir" "${CSR_ALIAS:-$safe_name}" "${CSR_PASSWORD:-}"
-      printf "[%s] Done %s\n" "$(date +%H:%M:%S)" "$CSR_NAME" >> "$log"
       count=$((count+1))
     done
-    printf "[%s] Completed %d request(s)\n" "$(date +%H:%M:%S)" "$count" >> "$log"
   done
   printf "\nProcessed %d request(s).\n" "$count"
   pause
