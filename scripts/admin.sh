@@ -595,6 +595,7 @@ menu_export() {
     printf "5) Export Signer Level3 Server\n"
     printf "6) Export Client PKCS#12\n"
     printf "7) Export Server PKCS#12\n"
+    printf "8) Verify PKCS#12 Password\n"
     printf "0) Back\n"
     read -r -p "Select: " choice
     case "$choice" in
@@ -605,10 +606,26 @@ menu_export() {
       5) export_signer_level3_server; pause ;;
       6) export_client; pause ;;
       7) export_server; pause ;;
+      8) verify_p12; pause ;;
       0) return ;;
       *) printf "Invalid choice\n"; pause ;;
     esac
   done
+}
+
+verify_p12() {
+  local path password
+  path="$(prompt "PKCS#12 path")"
+  password="$(prompt_secret "Password")"
+  if [[ -z "$path" || ! -f "$path" ]]; then
+    printf "Missing PKCS#12 file.\n"
+    return
+  fi
+  if openssl pkcs12 -info -in "$path" -noout -passin "pass:${password}"; then
+    printf "Password OK\n"
+  else
+    printf "Password invalid\n"
+  fi
 }
 
 menu_import() {
