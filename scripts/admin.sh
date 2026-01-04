@@ -22,11 +22,11 @@ prompt() {
   local value
   if [[ -n "$default" ]]; then
     read -r -p "${label} [${default}]: " value
-    printf '%s' "${value:-$default}"
+    value="${value:-$default}"
   else
     read -r -p "${label}: " value
-    printf '%s' "$value"
   fi
+  printf '%s' "$(sanitize_input "$value")"
 }
 
 prompt_secret() {
@@ -34,6 +34,20 @@ prompt_secret() {
   local value
   read -r -s -p "${label}: " value
   printf "\n"
+  printf '%s' "$(sanitize_input "$value")"
+}
+
+sanitize_input() {
+  local value="$1"
+  value="$(printf '%s' "$value" | tr -d '\r\n')"
+  value="$(printf '%s' "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  printf '%s' "$value"
+}
+
+sanitize_number() {
+  local value="$1"
+  value="$(sanitize_input "$value")"
+  value="$(printf '%s' "$value" | tr -cd '0-9')"
   printf '%s' "$value"
 }
 
@@ -349,8 +363,8 @@ print_header() {
 make_root() {
   local cn days bits
   cn="$(prompt "Root CN" "$(conf_get root_cn)")"
-  days="$(prompt "Root days" "$(conf_get root_days)")"
-  bits="$(prompt "Root key bits" "$(conf_get root_key_bits)")"
+  days="$(sanitize_number "$(prompt "Root days" "$(conf_get root_days)")")"
+  bits="$(sanitize_number "$(prompt "Root key bits" "$(conf_get root_key_bits)")")"
   local args=()
   [[ -n "$cn" ]] && args+=("$cn")
   [[ -n "$days" ]] && args+=("$days")
@@ -361,8 +375,8 @@ make_root() {
 make_level1() {
   local cn days bits
   cn="$(prompt "Level1 CN" "$(conf_get level1_cn)")"
-  days="$(prompt "Level1 days" "$(conf_get level1_days)")"
-  bits="$(prompt "Level1 key bits" "$(conf_get level1_key_bits)")"
+  days="$(sanitize_number "$(prompt "Level1 days" "$(conf_get level1_days)")")"
+  bits="$(sanitize_number "$(prompt "Level1 key bits" "$(conf_get level1_key_bits)")")"
   local args=()
   [[ -n "$cn" ]] && args+=("$cn")
   [[ -n "$days" ]] && args+=("$days")
@@ -373,8 +387,8 @@ make_level1() {
 make_level2() {
   local cn days bits
   cn="$(prompt "Level2 CN" "$(conf_get level2_cn)")"
-  days="$(prompt "Level2 days" "$(conf_get level2_days)")"
-  bits="$(prompt "Level2 key bits" "$(conf_get level2_key_bits)")"
+  days="$(sanitize_number "$(prompt "Level2 days" "$(conf_get level2_days)")")"
+  bits="$(sanitize_number "$(prompt "Level2 key bits" "$(conf_get level2_key_bits)")")"
   local args=()
   [[ -n "$cn" ]] && args+=("$cn")
   [[ -n "$days" ]] && args+=("$days")
@@ -385,8 +399,8 @@ make_level2() {
 make_level3_client() {
   local cn days bits
   cn="$(prompt "Level3 Client CN" "$(conf_get level3_client_cn)")"
-  days="$(prompt "Level3 Client days" "$(conf_get level3_client_days)")"
-  bits="$(prompt "Level3 Client key bits" "$(conf_get level3_client_key_bits)")"
+  days="$(sanitize_number "$(prompt "Level3 Client days" "$(conf_get level3_client_days)")")"
+  bits="$(sanitize_number "$(prompt "Level3 Client key bits" "$(conf_get level3_client_key_bits)")")"
   local args=()
   [[ -n "$cn" ]] && args+=("$cn")
   [[ -n "$days" ]] && args+=("$days")
@@ -397,8 +411,8 @@ make_level3_client() {
 make_level3_server() {
   local cn days bits
   cn="$(prompt "Level3 Server CN" "$(conf_get level3_server_cn)")"
-  days="$(prompt "Level3 Server days" "$(conf_get level3_server_days)")"
-  bits="$(prompt "Level3 Server key bits" "$(conf_get level3_server_key_bits)")"
+  days="$(sanitize_number "$(prompt "Level3 Server days" "$(conf_get level3_server_days)")")"
+  bits="$(sanitize_number "$(prompt "Level3 Server key bits" "$(conf_get level3_server_key_bits)")")"
   local args=()
   [[ -n "$cn" ]] && args+=("$cn")
   [[ -n "$days" ]] && args+=("$days")
@@ -417,8 +431,8 @@ make_full_chain() {
 issue_client() {
   local cn days bits
   cn="$(prompt "Client CN" "$(conf_get client_cn)")"
-  days="$(prompt "Client days" "$(conf_get client_days)")"
-  bits="$(prompt "Client key bits" "$(conf_get client_key_bits)")"
+  days="$(sanitize_number "$(prompt "Client days" "$(conf_get client_days)")")"
+  bits="$(sanitize_number "$(prompt "Client key bits" "$(conf_get client_key_bits)")")"
   local args=()
   [[ -n "$cn" ]] && args+=("$cn")
   [[ -n "$days" ]] && args+=("$days")
@@ -430,7 +444,7 @@ issue_client_from_csr() {
   local name csr days
   name="$(prompt "Client name")"
   csr="$(prompt "CSR path")"
-  days="$(prompt "Days" "$(conf_get client_days)")"
+  days="$(sanitize_number "$(prompt "Days" "$(conf_get client_days)")")"
   local args=("$name" "$csr")
   [[ -n "$days" ]] && args+=("$days")
   run_cmd "Issue Client from CSR" 0 "${SCRIPTS_DIR}/make/04_make_client_from_csr.sh" "${args[@]}"
@@ -440,8 +454,8 @@ issue_server() {
   local cn san days bits
   cn="$(prompt "Server CN")"
   san="$(prompt "Server SAN (e.g., DNS:api.example.local)" "$(conf_get server_san)")"
-  days="$(prompt "Server days" "$(conf_get server_days)")"
-  bits="$(prompt "Server key bits" "$(conf_get server_key_bits)")"
+  days="$(sanitize_number "$(prompt "Server days" "$(conf_get server_days)")")"
+  bits="$(sanitize_number "$(prompt "Server key bits" "$(conf_get server_key_bits)")")"
   local args=("$cn" "$san")
   [[ -n "$days" ]] && args+=("$days")
   [[ -n "$bits" ]] && args+=("$bits")
@@ -453,7 +467,7 @@ issue_server_from_csr() {
   name="$(prompt "Server name")"
   csr="$(prompt "CSR path")"
   san="$(prompt "SAN (e.g., DNS:api.example.local)" "$(conf_get server_san)")"
-  days="$(prompt "Days" "$(conf_get server_days)")"
+  days="$(sanitize_number "$(prompt "Days" "$(conf_get server_days)")")"
   local args=("$name" "$csr")
   [[ -n "$san" ]] && args+=("$san")
   [[ -n "$days" ]] && args+=("$days")
