@@ -633,11 +633,12 @@ menu_export() {
 }
 
 verify_p12() {
-  local path password
-  path="$(prompt "PKCS#12 path")"
+  local name password path
+  name="$(prompt "Server name")"
   password="$(prompt_secret "Password")"
-  if [[ -z "$path" || ! -f "$path" ]]; then
-    printf "Missing PKCS#12 file.\n"
+  path="trust-bundles/server/${name}/${name}.p12"
+  if [[ ! -f "$path" ]]; then
+    printf "Missing PKCS#12 file: %s\n" "$path"
     return
   fi
   if openssl pkcs12 -info -in "$path" -noout -passin "pass:${password}"; then
