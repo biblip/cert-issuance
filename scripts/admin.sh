@@ -263,10 +263,12 @@ run_history_command() {
   cmd_string="$(build_cmd_string "$@")"
   printf "\n>> %s\n" "$cmd_string"
   if [[ "$needs_password" == "1" && -n "$password" ]]; then
-    P12_PASSWORD="$password" "$@"
-  else
-    "$@"
+    P12_PASSWORD="$password"
   fi
+  if [[ -n "${P12_PASSWORD+x}" ]]; then
+    export P12_PASSWORD
+  fi
+  "$@"
   record_history "$label" "$needs_password" "$cmd_string"
 }
 
@@ -277,6 +279,9 @@ run_cmd() {
   local cmd_string
   cmd_string="$(build_cmd_string "$@")"
   printf "\n>> %s\n" "$cmd_string"
+  if [[ -n "${P12_PASSWORD+x}" ]]; then
+    export P12_PASSWORD
+  fi
   "$@"
   record_history "$label" "$needs_password" "$cmd_string"
 }
@@ -481,7 +486,7 @@ export_client() {
   alias="$(prompt "Alias (blank for default)")"
   password="$(prompt_secret "Password (blank to use P12_PASSWORD)")"
   if [[ -n "$password" ]]; then
-    P12_PASSWORD="$password" run_cmd "Export Client Bundle" 1 "${SCRIPTS_DIR}/export/04_export_client.sh" "$name" ${alias:+$alias}
+    run_cmd "Export Client Bundle" 1 "${SCRIPTS_DIR}/export/04_export_client.sh" "$name" ${alias:+$alias} "$password"
   else
     run_cmd "Export Client Bundle" 1 "${SCRIPTS_DIR}/export/04_export_client.sh" "$name" ${alias:+$alias}
   fi
@@ -493,7 +498,7 @@ export_server() {
   alias="$(prompt "Alias (blank for default)")"
   password="$(prompt_secret "Password (blank to use P12_PASSWORD)")"
   if [[ -n "$password" ]]; then
-    P12_PASSWORD="$password" run_cmd "Export Server Bundle" 1 "${SCRIPTS_DIR}/export/04_export_server.sh" "$name" ${alias:+$alias}
+    run_cmd "Export Server Bundle" 1 "${SCRIPTS_DIR}/export/04_export_server.sh" "$name" ${alias:+$alias} "$password"
   else
     run_cmd "Export Server Bundle" 1 "${SCRIPTS_DIR}/export/04_export_server.sh" "$name" ${alias:+$alias}
   fi

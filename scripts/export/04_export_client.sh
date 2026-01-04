@@ -19,6 +19,7 @@ SAFE_NAME="${SAFE_NAME:-client}"
 
 ALIAS="${ALIAS_ARG:-$SAFE_NAME}"
 PASSWORD="${PASSWORD_ARG:-${P12_PASSWORD:-}}"
+PASSWORD="$(printf '%s' "$PASSWORD" | tr -d '\r\n')"
 
 BASE_DIR="output/client/${SAFE_NAME}"
 KEY="${BASE_DIR}/private/${SAFE_NAME}.key.pem"
@@ -49,11 +50,11 @@ cat /dev/null > "$CHAIN_TMP"
 [[ -f "level1/certs/level1.crt.pem" ]] && cat "level1/certs/level1.crt.pem" >> "$CHAIN_TMP"
 [[ -f "root/certs/root.crt.pem" ]] && cat "root/certs/root.crt.pem" >> "$CHAIN_TMP"
 
-if [[ -f "$KEY" ]]; then
-  if [[ -z "$PASSWORD" ]]; then
-    echo "Missing password. Provide it as an argument or set P12_PASSWORD."
-    exit 1
-  fi
+  if [[ -f "$KEY" ]]; then
+    if [[ -z "$PASSWORD" ]]; then
+      echo "Missing password. Provide it as an argument or set P12_PASSWORD."
+      exit 1
+    fi
   if [[ -s "$CHAIN_TMP" ]]; then
     openssl pkcs12 -export \
       -name "$ALIAS" \
