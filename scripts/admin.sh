@@ -636,14 +636,19 @@ verify_p12() {
   local name password path
   name="$(prompt "Server name")"
   password="$(prompt_secret "Password")"
+  password="$(sanitize_input "$password")"
   path="trust-bundles/server/${name}/${name}.p12"
   if [[ ! -f "$path" ]]; then
     printf "Missing PKCS#12 file: %s\n" "$path"
     return
   fi
-  if openssl pkcs12 -info -in "$path" -noout -passin "pass:${password}"; then
+  local tmp_out
+  tmp_out="$(mktemp)"
+  if openssl pkcs12 -in "$path" -clcerts -nokeys -passin "pass:${password}" -out "$tmp_out"; then
+    rm -f "$tmp_out"
     printf "Password OK\n"
   else
+    rm -f "$tmp_out"
     printf "Password invalid\n"
   fi
 }
